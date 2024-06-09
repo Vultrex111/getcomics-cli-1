@@ -12,7 +12,6 @@ SPECIAL_CASES = {
     "spider man": "Spider-Man",
     "ms marvel": "Ms. Marvel",
     "spider gwen": "Spider-Gwen",
-
 }
 
 def normalize_keyword(keyword: str) -> str:
@@ -63,16 +62,17 @@ def search_getcomics(keyword: str, page_number: int = 1) -> dict:
                 if year not in categorized_links:
                     categorized_links[year] = []
                 # Get size information
-                size = get_comic_size(href)
+                size = get_comic_size(href, keyword)
                 categorized_links[year].append({'text': text, 'href': href, 'size': size})
             else:
                 if 'Unknown' not in categorized_links:
                     categorized_links['Unknown'] = []
-                categorized_links['Unknown'].append({'text': text, 'href': href, 'size': 'Unknown'})
+                size = get_comic_size(href, keyword)
+                categorized_links['Unknown'].append({'text': text, 'href': href, 'size': size})
 
     return categorized_links
 
-def get_comic_size(link: str) -> str:
+def get_comic_size(link: str, keyword: str) -> str:
     """Get the size of a comic book."""
     response = requests.get(link)
     response.raise_for_status()
@@ -84,9 +84,19 @@ def get_comic_size(link: str) -> str:
         size_match = re.search(r'Size\s*:\s*([\d.]+\s*MB)', size_text)
         if size_match:
             return size_match.group(1)
+    
+    # If size information is not found in <p> element, look for <li> tags
+    if 'vol' in keyword.lower():
+        download_list_items = soup.find_all("li")
+        for li in download_list_items:
+            if keyword.lower() in li.get_text().lower():
+                size_match = re.search(r'\(([\d.]+\s*MB)\)', li.get_text())
+                if size_match:
+                    return size_match.group(1)
+    
     return 'Unknown'
 
-def get_download_links(link: str) -> list:
+def get_download_links(link: str, keyword: str) -> list:
     """Get download links from a comic page."""
     response = requests.get(link)
     response.raise_for_status()
@@ -94,11 +104,14 @@ def get_download_links(link: str) -> list:
     soup = BeautifulSoup(response.text, 'html.parser')
     download_links = []
 
-    download_elements = soup.find_all('a', class_='aio-red', href=True)
-    for element in download_elements:
-        download_link = element['href']
-        if 'readcomicsonline.ru' not in download_link:
-            download_links.append(download_link)
+    # Check all <li> elements for any download links
+    download_list_items = soup.find_all("li")
+    for li in download_list_items:
+        if keyword.lower() in li.get_text().lower():
+            links = li.find_all('a', href=True)
+            for link in links:
+                if 'Main Server' in link.get_text(strip=True):
+                    download_links.append(link['href'])
 
     return download_links
 
@@ -143,26 +156,27 @@ def main() -> None:
         selected_comic = comics[choice - 1]
         print(f"\nYou selected: {selected_comic['text']} ({selected_comic['year']}) - Size: {selected_comic['size']}")
 
-        confirm_download = input("Confirm download (y/N): ").strip().lower()
-        if confirm_download == 'y':
-            if selected_comic['size'] == 'Unknown':
-                print("Size information is not available for this comic.")
-                return
-
-            download_links = get_download_links(selected_comic['href'])
+        confirm_download = input("Confirm download (Y/n): ").strip().lower()
+        if confirm_download in ['', 'y']:
+            download_links = get_download_links(selected_comic['href'], keyword)
             if download_links:
-                print("Download link found:")
-                print(download_links[0])
+                formatted_links = [
+                    f"{selected_comic['text']} Vol {idx+1}: {link}" for idx, link in enumerate(download_links)
+                ]
+                print("Download links found:")
+                for link in formatted_links:
+                    print(link)
                 input("\nPress Enter to start the download...")
 
                 # Extract the comic name for folder creation
                 comic_name = ' '.join(selected_comic['text'].split()[:2])  # Assume first two words are the series name
                 output_dir = os.path.join("Comic Book", format_folder_name(comic_name))
 
-                download_with_aria2c(download_links[0], output_dir)
+                for dl in download_links:
+                    download_with_aria2c(dl, output_dir)
                 print("Download completed.")
             else:
-                print("Download link not found.")
+                print("Download links not found.")
 
     except (ValueError, IndexError):
         print("Invalid selection. Exiting.")
