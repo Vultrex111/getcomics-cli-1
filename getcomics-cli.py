@@ -10,7 +10,9 @@ SEARCH_URL_TEMPLATE = "https://getcomics.org/page/{}/?s={}"
 YEAR_PATTERN = re.compile(r'\b(19|20)\d{2}\b')
 SPECIAL_CASES = {
     "spider man": "Spider-Man",
-    "ms marvel": "Ms. Marvel"
+    "ms marvel": "Ms. Marvel",
+    "spider gwen": "Spider-Gwen",
+
 }
 
 def normalize_keyword(keyword: str) -> str:
