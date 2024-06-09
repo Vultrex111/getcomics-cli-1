@@ -55,7 +55,7 @@ def search_getcomics(keyword: str, page_number: int = 1) -> dict:
         text = link.get_text().strip()
 
         # Check if the link contains the keyword in the text and is from the correct domain
-        if 'getcomics.org' in href and keyword.lower() in text.lower():
+        if 'getcomics.org' in href and any(word in text.lower() for word in keyword.lower().split()):
             match = YEAR_PATTERN.search(href)
             if match:
                 year = match.group(0)
@@ -107,7 +107,7 @@ def get_download_links(link: str, keyword: str) -> list:
     # Check all <li> elements for any download links
     download_list_items = soup.find_all("li")
     for li in download_list_items:
-        if keyword.lower() in li.get_text().lower():
+        if keyword.lower() in li.get_text().lower() or any(word in li.get_text().lower() for word in keyword.lower().split()):
             links = li.find_all('a', href=True)
             for link in links:
                 if 'Main Server' in link.get_text(strip=True):
@@ -132,7 +132,11 @@ def main() -> None:
     keyword = normalize_keyword(args.keyword)
     page_number = args.page
 
-    categorized_links = search_getcomics(keyword, page_number)
+    try:
+        categorized_links = search_getcomics(keyword, page_number)
+    except requests.RequestException as e:
+        print(f"Error during search: {e}")
+        return
 
     comics = []
     for year, links in categorized_links.items():
@@ -164,20 +168,23 @@ def main() -> None:
                     f"{selected_comic['text']} Vol {idx+1}: {link}" for idx, link in enumerate(download_links)
                 ]
                 print("Download links found:")
-                for link in formatted_links:
-                    print(link)
-                input("\nPress Enter to start the download...")
+                for idx, link in enumerate(formatted_links, start=1):
+                    print(f"{idx}. {link}")
 
-                # Extract the comic name for folder creation
+                vol_choice = input("\nEnter the number of the volume you want to download or 'all' to download all volumes: ").strip().lower()
+                if vol_choice == 'all':
+                    vol_indices = range(1, len(download_links) + 1)
+                else:
+                    vol_indices = [int(vol_choice)]
+
                 comic_name = ' '.join(selected_comic['text'].split()[:2])  # Assume first two words are the series name
                 output_dir = os.path.join("Comic Book", format_folder_name(comic_name))
 
-                for dl in download_links:
-                    download_with_aria2c(dl, output_dir)
+                for vol_index in vol_indices:
+                    download_with_aria2c(download_links[vol_index - 1], output_dir)
                 print("Download completed.")
             else:
                 print("Download links not found.")
-
     except (ValueError, IndexError):
         print("Invalid selection. Exiting.")
 
