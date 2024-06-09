@@ -9,8 +9,8 @@ import subprocess
 SEARCH_URL_TEMPLATE = "https://getcomics.org/page/{}/?s={}"
 YEAR_PATTERN = re.compile(r'\b(19|20)\d{2}\b')
 SPECIAL_CASES = {
-    "spider man": "spider-man",
-    "ms marvel": "ms. marvel"
+    "spider man": "Spider-Man",
+    "ms marvel": "Ms. Marvel"
 }
 
 def normalize_keyword(keyword: str) -> str:
@@ -20,6 +20,18 @@ def normalize_keyword(keyword: str) -> str:
         if case in keyword:
             keyword = keyword.replace(case, SPECIAL_CASES[case])
     return keyword
+
+def format_folder_name(name: str) -> str:
+    """Format the folder name by capitalizing properly and handling special cases."""
+    # Apply special cases first
+    name = normalize_keyword(name)
+    for case, replacement in SPECIAL_CASES.items():
+        if case in name:
+            name = name.replace(case, replacement)
+
+    # Capitalize the first letter of each word
+    name = ' '.join(word.capitalize() for word in name.split())
+    return f"{name} Comics"
 
 def search_getcomics(keyword: str, page_number: int = 1) -> dict:
     """Search GetComics for a keyword and return categorized links."""
@@ -79,21 +91,6 @@ def download_with_aria2c(url: str, output_dir: str = '.') -> None:
     command = ['aria2c', '-d', output_dir, url]
     subprocess.run(command)
 
-def create_comic_folder(name: str) -> str:
-    """Create a comic folder with proper naming convention."""
-    # Special cases handling
-    for case, replacement in SPECIAL_CASES.items():
-        name = name.lower().replace(case, replacement)
-    
-    # Capitalize the first letter of each word
-    name = ' '.join(word.capitalize() for word in name.split())
-    
-    # Create the folder path
-    folder_path = os.path.join("Comic Book", f"{name} Comics")
-    if not os.path.exists(folder_path):
-        os.makedirs(folder_path)
-    return folder_path
-
 def main() -> None:
     """Main program entry point."""
     parser = argparse.ArgumentParser(description="Search GetComics for a keyword and return all matching links categorized by year.")
@@ -135,11 +132,11 @@ def main() -> None:
                 print("Download link found:")
                 print(download_links[0])
                 input("\nPress Enter to start the download...")
-                
+
                 # Extract the comic name for folder creation
-                comic_name = selected_comic['text'].split(' ')[0]
-                output_dir = create_comic_folder(comic_name)
-                
+                comic_name = ' '.join(selected_comic['text'].split()[:2])  # Assume first two words are the series name
+                output_dir = os.path.join("Comic Book", format_folder_name(comic_name))
+
                 download_with_aria2c(download_links[0], output_dir)
                 print("Download completed.")
             else:
