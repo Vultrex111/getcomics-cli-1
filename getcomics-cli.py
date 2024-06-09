@@ -60,13 +60,29 @@ def search_getcomics(keyword: str, page_number: int = 1) -> dict:
                 year = match.group(0)
                 if year not in categorized_links:
                     categorized_links[year] = []
-                categorized_links[year].append({'text': text, 'href': href})
+                # Get size information
+                size = get_comic_size(href)
+                categorized_links[year].append({'text': text, 'href': href, 'size': size})
             else:
                 if 'Unknown' not in categorized_links:
                     categorized_links['Unknown'] = []
-                categorized_links['Unknown'].append({'text': text, 'href': href})
+                categorized_links['Unknown'].append({'text': text, 'href': href, 'size': 'Unknown'})
 
     return categorized_links
+
+def get_comic_size(link: str) -> str:
+    """Get the size of a comic book."""
+    response = requests.get(link)
+    response.raise_for_status()
+
+    soup = BeautifulSoup(response.text, 'html.parser')
+    size_element = soup.find('p', style="text-align: center;")
+    if size_element:
+        size_text = size_element.get_text()
+        size_match = re.search(r'Size\s*:\s*([\d.]+\s*MB)', size_text)
+        if size_match:
+            return size_match.group(1)
+    return 'Unknown'
 
 def get_download_links(link: str) -> list:
     """Get download links from a comic page."""
@@ -106,14 +122,14 @@ def main() -> None:
     comics = []
     for year, links in categorized_links.items():
         for item in links:
-            comics.append({'year': year, 'text': item['text'], 'href': item['href']})
+            comics.append({'year': year, 'text': item['text'], 'href': item['href'], 'size': item['size']})
 
     if not comics:
         print("No comics found.")
         return
 
     for idx, comic in enumerate(comics, start=1):
-        print(f"{idx}. [{comic['year']}] {comic['text']}")
+        print(f"{idx}. [{comic['year']}] {comic['text']} - Size: {comic['size']}")
 
     choice = input("\nEnter the number of the comic you want to download or 'exit' to quit: ").strip().lower()
     if choice == 'exit':
@@ -123,10 +139,14 @@ def main() -> None:
     try:
         choice = int(choice)
         selected_comic = comics[choice - 1]
-        print(f"\nYou selected: {selected_comic['text']} ({selected_comic['year']})")
+        print(f"\nYou selected: {selected_comic['text']} ({selected_comic['year']}) - Size: {selected_comic['size']}")
 
         confirm_download = input("Confirm download (y/N): ").strip().lower()
         if confirm_download == 'y':
+            if selected_comic['size'] == 'Unknown':
+                print("Size information is not available for this comic.")
+                return
+
             download_links = get_download_links(selected_comic['href'])
             if download_links:
                 print("Download link found:")
@@ -140,7 +160,8 @@ def main() -> None:
                 download_with_aria2c(download_links[0], output_dir)
                 print("Download completed.")
             else:
-                print("No download links found for the selected comic.")
+                print("Download link not found.")
+
     except (ValueError, IndexError):
         print("Invalid selection. Exiting.")
 
