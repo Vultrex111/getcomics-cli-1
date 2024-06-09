@@ -79,6 +79,21 @@ def download_with_aria2c(url: str, output_dir: str = '.') -> None:
     command = ['aria2c', '-d', output_dir, url]
     subprocess.run(command)
 
+def create_comic_folder(name: str) -> str:
+    """Create a comic folder with proper naming convention."""
+    # Special cases handling
+    for case, replacement in SPECIAL_CASES.items():
+        name = name.lower().replace(case, replacement)
+    
+    # Capitalize the first letter of each word
+    name = ' '.join(word.capitalize() for word in name.split())
+    
+    # Create the folder path
+    folder_path = os.path.join("Comic Book", f"{name} Comics")
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+    return folder_path
+
 def main() -> None:
     """Main program entry point."""
     parser = argparse.ArgumentParser(description="Search GetComics for a keyword and return all matching links categorized by year.")
@@ -120,9 +135,11 @@ def main() -> None:
                 print("Download link found:")
                 print(download_links[0])
                 input("\nPress Enter to start the download...")
-                comic_folder_name = selected_comic['text'].split()[0].replace(' ', '-')
-                comic_folder_name = comic_folder_name.replace("spider-man", "Spider-Man")
-                output_dir = os.path.join("Comic Book", comic_folder_name)
+                
+                # Extract the comic name for folder creation
+                comic_name = selected_comic['text'].split(' ')[0]
+                output_dir = create_comic_folder(comic_name)
+                
                 download_with_aria2c(download_links[0], output_dir)
                 print("Download completed.")
             else:
